@@ -383,22 +383,27 @@ export class AudioSystem {
 
   init(): void {
     try {
-      this.ctx = new AudioContext();
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      this.ctx = new AudioCtx();
+      if (!this.ctx) return;
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.value = 0.8;
       this.masterGain.connect(this.ctx.destination);
       this.musicGain = this.ctx.createGain();
       this.musicGain.gain.value = 0.3;
-      this.musicGain.connect(this.masterGain);
+      if (this.musicGain && this.masterGain) this.musicGain.connect(this.masterGain);
       this.sfxGain = this.ctx.createGain();
       this.sfxGain.gain.value = 0.6;
-      this.sfxGain.connect(this.masterGain);
-    } catch { /* no audio */ }
+      if (this.sfxGain && this.masterGain) this.sfxGain.connect(this.masterGain);
+    } catch (e) {
+      console.warn('Audio init hatası:', e);
+    }
   }
 
   resume(): void {
-    if (this.ctx?.state === 'suspended') {
-      this.ctx.resume();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
     }
   }
 

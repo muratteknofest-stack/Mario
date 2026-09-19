@@ -11,18 +11,14 @@ import { BootScene, MenuScene, WorldMapScene, PlayScene, ResultsScene } from './
 export function createGame(container: HTMLElement): Phaser.Game {
   const audioSys = new AudioSystem();
 
-  // Çözünürlük hesaplama
-  const parentWidth = container.clientWidth || window.innerWidth;
-  const parentHeight = container.clientHeight || window.innerHeight;
-  
-  let scale = Math.min(parentWidth / GAME_CONFIG.logicalWidth, parentHeight / GAME_CONFIG.logicalHeight);
-  
-  // 4K desteği
-  const dpr = Math.min(window.devicePixelRatio || 1, 2); // Max 2x for performance
-  
+  // Container'a ID ver
+  if (!container.id) {
+    container.id = 'phaser-game';
+  }
+
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
-    parent: container,
+    parent: container.id,
     width: GAME_CONFIG.logicalWidth,
     height: GAME_CONFIG.logicalHeight,
     pixelArt: false,
@@ -50,13 +46,9 @@ export function createGame(container: HTMLElement): Phaser.Game {
     scene: [BootScene, MenuScene, WorldMapScene, PlayScene, ResultsScene],
     backgroundColor: '#0a1628',
     input: {
-      activePointers: 4, // Çoklu dokunma desteği
+      activePointers: 4,
     },
-    render: {
-      antialias: true,
-      pixelArt: false,
-      roundPixels: true,
-    },
+    banner: false,
   };
 
   const game = new Phaser.Game(config);
@@ -64,10 +56,20 @@ export function createGame(container: HTMLElement): Phaser.Game {
   // Ses sistemini oyuna ekle
   (game as any).audioSys = audioSys;
   
+  // Ses sistemini başlat
+  try {
+    audioSys.init();
+  } catch (e) {
+    console.warn('Ses sistemi başlatılamadı:', e);
+  }
+
   // İlk kullanıcı etkileşiminde sesi aç
   const resumeAudio = () => {
-    audioSys.init();
-    audioSys.resume();
+    try {
+      audioSys.resume();
+    } catch (e) {
+      console.warn('Ses devam ettirilemedi:', e);
+    }
     window.removeEventListener('pointerdown', resumeAudio);
     window.removeEventListener('keydown', resumeAudio);
   };
@@ -85,7 +87,13 @@ export function createGame(container: HTMLElement): Phaser.Game {
 
   // Orientation değişimi
   window.addEventListener('orientationchange', () => {
-    setTimeout(() => game.scale.refresh(), 100);
+    setTimeout(() => {
+      try {
+        game.scale.refresh();
+      } catch (e) {
+        console.warn('Scale refresh hatası:', e);
+      }
+    }, 100);
   });
 
   return game;

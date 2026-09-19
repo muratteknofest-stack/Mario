@@ -10,7 +10,7 @@ import { getAllLevels, getLevelById, getLevelsByWorld } from './levels';
 
 // ---- BOOT SCENE ----
 export class BootScene extends Phaser.Scene {
-  constructor() { super('Boot'); }
+  constructor() { super({ key: 'Boot' }); }
 
   create(): void {
     generateTextures(this);
@@ -20,23 +20,26 @@ export class BootScene extends Phaser.Scene {
 
 // ---- MENU SCENE ----
 export class MenuScene extends Phaser.Scene {
-  private audio!: AudioSystem;
-  private selectedSlot: number = 0;
-  private menuState: 'main' | 'slots' | 'settings' | 'help' = 'main';
+  private audio: AudioSystem | null = null;
+  private menuItems: Phaser.GameObjects.Text[] = [];
 
-  constructor() { super('Menu'); }
+  constructor() { super({ key: 'Menu' }); }
 
   create(): void {
-    this.audio = (this.game as any).audioSys;
+    this.audio = (this.game as any).audioSys || null;
     if (this.audio) this.audio.resume();
 
     const cx = GAME_CONFIG.logicalWidth / 2;
-    const cy = GAME_CONFIG.logicalHeight / 2;
 
     // Arka plan
     const bg = this.add.graphics();
-    bg.fillGradientStyle(0x0a1628, 0x0a1628, 0x1a2d4a, 0x1a2d4a, 1);
+    bg.fillStyle(0x0a1628, 1);
     bg.fillRect(0, 0, GAME_CONFIG.logicalWidth, GAME_CONFIG.logicalHeight);
+
+    // Gradient overlay
+    const bg2 = this.add.graphics();
+    bg2.fillStyle(0x1a2d4a, 0.5);
+    bg2.fillRect(0, GAME_CONFIG.logicalHeight / 2, GAME_CONFIG.logicalWidth, GAME_CONFIG.logicalHeight / 2);
 
     // Yıldızlar
     for (let i = 0; i < 50; i++) {
@@ -46,88 +49,68 @@ export class MenuScene extends Phaser.Scene {
     }
 
     // Başlık
-    this.add.text(cx, 120, 'KIVILCIM', {
+    this.add.text(cx, 100, 'KIVILCIM', {
       fontSize: '64px', fontFamily: 'Arial, sans-serif', color: '#2dd4bf',
       stroke: '#0a1628', strokeThickness: 6,
     }).setOrigin(0.5);
 
-    this.add.text(cx, 180, 'Gök Yüzü Adaları', {
+    this.add.text(cx, 165, 'Gök Yüzü Adaları', {
       fontSize: '24px', fontFamily: 'Arial, sans-serif', color: '#94a3b8',
     }).setOrigin(0.5);
 
     // Ana karakter önizleme
-    this.add.image(cx, 280, 'player_idle').setScale(3);
+    this.add.image(cx, 270, 'player_idle').setScale(3);
 
     this.showMainMenu();
   }
 
-  private clearMenu(): void {
-    this.children.list.filter(c => c.type === 'Text' || c.type === 'Rectangle' || c.type === 'Graphics' && (c as any)._menuBtn)
-      .forEach(c => { if ((c as any)._menuBtn || c.type === 'Text') c.destroy(); });
-    // Tüm menü nesnelerini temizle
-    this.children.list.filter(c => (c as any)._menuBtn).forEach(c => c.destroy());
+  private clearMenuItems(): void {
+    this.menuItems.forEach(item => item.destroy());
+    this.menuItems = [];
+  }
+
+  private addMenuItem(x: number, y: number, text: string, color: string, onClick: () => void): Phaser.GameObjects.Text {
+    const txt = this.add.text(x, y, text, {
+      fontSize: '22px', fontFamily: 'Arial, sans-serif', color: color,
+      backgroundColor: '#1e293b', padding: { x: 20, y: 10 },
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    txt.on('pointerover', () => txt.setBackgroundColor('#334155'));
+    txt.on('pointerout', () => txt.setBackgroundColor('#1e293b'));
+    txt.on('pointerdown', onClick);
+    this.menuItems.push(txt);
+    return txt;
   }
 
   private showMainMenu(): void {
     this.clearMenuItems();
-    this.menuState = 'main';
     const cx = GAME_CONFIG.logicalWidth / 2;
     const saves = loadAllSaves();
     const hasSave = saves.some(s => s !== null);
 
-    const buttons = [
-      { label: t('continue'), action: () => { if (hasSave) this.showSlotSelect('continue'); }, active: hasSave },
-      { label: t('newGame'), action: () => this.showSlotSelect('new') },
-      { label: t('worldMap'), action: () => this.showWorldMap() },
-      { label: t('settings'), action: () => this.showSettings() },
-      { label: t('howToPlay'), action: () => this.showHelp() },
-    ];
-
-    buttons.forEach((btn, i) => {
-      const y = 380 + i * 55;
-      const txt = this.add.text(cx, y, btn.label, {
-        fontSize: '22px', fontFamily: 'Arial, sans-serif',
-        color: btn.active !== false ? '#e2e8f0' : '#475569',
-        backgroundColor: '#1e293b', padding: { x: 20, y: 10 },
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-      (txt as any)._menuBtn = true;
-
-      if (btn.active !== false) {
-        txt.on('pointerover', () => txt.setStyle({ backgroundColor: '#334155', color: '#2dd4bf' }));
-        txt.on('pointerout', () => txt.setStyle({ backgroundColor: '#1e293b', color: '#e2e8f0' }));
-        txt.on('pointerdown', () => btn.action());
-      }
+    this.addMenuItem(cx, 370, t('continue'), hasSave ? '#e2e8f0' : '#475569', () => {
+      if (hasSave) this.showSlotSelect('continue');
     });
-  }
-
-  private clearMenuItems(): void {
-    this.children.list.filter(c => (c as any)._menuBtn).forEach(c => c.destroy());
+    this.addMenuItem(cx, 425, t('newGame'), '#e2e8f0', () => this.showSlotSelect('new'));
+    this.addMenuItem(cx, 480, t('worldMap'), '#e2e8f0', () => this.showWorldMap());
+    this.addMenuItem(cx, 535, t('settings'), '#e2e8f0', () => this.showSettings());
+    this.addMenuItem(cx, 590, t('howToPlay'), '#e2e8f0', () => this.showHelp());
   }
 
   private showSlotSelect(mode: 'new' | 'continue'): void {
     this.clearMenuItems();
-    this.menuState = 'slots';
     const cx = GAME_CONFIG.logicalWidth / 2;
     const saves = loadAllSaves();
 
-    this.add.text(cx, 350, t('selectSlot'), {
+    const titleTxt = this.add.text(cx, 350, t('selectSlot'), {
       fontSize: '20px', fontFamily: 'Arial, sans-serif', color: '#94a3b8',
     }).setOrigin(0.5);
-    (this.children.list[this.children.list.length - 1] as any)._menuBtn = true;
+    this.menuItems.push(titleTxt);
 
     for (let i = 0; i < 3; i++) {
       const save = saves[i];
       const label = save ? `${save.playerName} - Dünya ${save.worldsUnlocked}` : `${t('empty')} ${i + 1}`;
-      const y = 400 + i * 50;
-      const txt = this.add.text(cx, y, label, {
-        fontSize: '18px', fontFamily: 'Arial, sans-serif', color: '#e2e8f0',
-        backgroundColor: '#1e293b', padding: { x: 20, y: 8 },
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-      (txt as any)._menuBtn = true;
-
-      txt.on('pointerover', () => txt.setStyle({ backgroundColor: '#334155' }));
-      txt.on('pointerout', () => txt.setStyle({ backgroundColor: '#1e293b' }));
-      txt.on('pointerdown', () => {
+      this.addMenuItem(cx, 400 + i * 50, label, '#e2e8f0', () => {
         if (mode === 'new') {
           const newSave = createEmptySave(i);
           saveGame(newSave);
@@ -143,27 +126,36 @@ export class MenuScene extends Phaser.Scene {
 
   private showSettings(): void {
     this.clearMenuItems();
-    this.menuState = 'settings';
     const cx = GAME_CONFIG.logicalWidth / 2;
     const save = loadSave(0) || createEmptySave(0);
 
     const settings = [
-      { label: `${t('masterVol')}: ${Math.round(save.settings.masterVolume * 100)}%`, action: () => { save.settings.masterVolume = (save.settings.masterVolume + 0.2) % 1.2; saveGame(save); this.showSettings(); } },
-      { label: `${t('musicVol')}: ${Math.round(save.settings.musicVolume * 100)}%`, action: () => { save.settings.musicVolume = (save.settings.musicVolume + 0.2) % 1.2; saveGame(save); this.showSettings(); } },
-      { label: `${t('sfxVol')}: ${Math.round(save.settings.sfxVolume * 100)}%`, action: () => { save.settings.sfxVolume = (save.settings.sfxVolume + 0.2) % 1.2; saveGame(save); this.showSettings(); } },
-      { label: `${t('screenShake')}: ${save.settings.screenShake ? 'Açık' : 'Kapalı'}`, action: () => { save.settings.screenShake = !save.settings.screenShake; saveGame(save); this.showSettings(); } },
-      { label: `${t('autoRun')}: ${save.settings.autoRun ? 'Açık' : 'Kapalı'}`, action: () => { save.settings.autoRun = !save.settings.autoRun; saveGame(save); this.showSettings(); } },
-      { label: `${t('quality')}: ${save.settings.quality}`, action: () => { const q = ['auto', '720p', '1080p', '1440p', '4k']; const idx = q.indexOf(save.settings.quality); save.settings.quality = q[(idx + 1) % q.length] as any; saveGame(save); this.showSettings(); } },
+      { label: `${t('masterVol')}: ${Math.round(save.settings.masterVolume * 100)}%` },
+      { label: `${t('musicVol')}: ${Math.round(save.settings.musicVolume * 100)}%` },
+      { label: `${t('sfxVol')}: ${Math.round(save.settings.sfxVolume * 100)}%` },
+      { label: `${t('screenShake')}: ${save.settings.screenShake ? 'Açık' : 'Kapalı'}` },
+      { label: `${t('autoRun')}: ${save.settings.autoRun ? 'Açık' : 'Kapalı'}` },
+      { label: `${t('quality')}: ${save.settings.quality}` },
     ];
 
     settings.forEach((s, i) => {
-      const y = 370 + i * 45;
-      const txt = this.add.text(cx, y, s.label, {
-        fontSize: '16px', fontFamily: 'Arial, sans-serif', color: '#e2e8f0',
-        backgroundColor: '#1e293b', padding: { x: 15, y: 8 },
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-      (txt as any)._menuBtn = true;
-      txt.on('pointerdown', () => s.action());
+      this.addMenuItem(cx, 370 + i * 42, s.label, '#e2e8f0', () => {
+        switch (i) {
+          case 0: save.settings.masterVolume = Math.min(1, save.settings.masterVolume + 0.2); if (save.settings.masterVolume > 1) save.settings.masterVolume = 0; break;
+          case 1: save.settings.musicVolume = Math.min(1, save.settings.musicVolume + 0.2); if (save.settings.musicVolume > 1) save.settings.musicVolume = 0; break;
+          case 2: save.settings.sfxVolume = Math.min(1, save.settings.sfxVolume + 0.2); if (save.settings.sfxVolume > 1) save.settings.sfxVolume = 0; break;
+          case 3: save.settings.screenShake = !save.settings.screenShake; break;
+          case 4: save.settings.autoRun = !save.settings.autoRun; break;
+          case 5: const q = ['auto', '720p', '1080p', '1440p', '4k']; const idx = q.indexOf(save.settings.quality); save.settings.quality = q[(idx + 1) % q.length] as any; break;
+        }
+        saveGame(save);
+        if (this.audio) {
+          this.audio.setMasterVolume(save.settings.masterVolume);
+          this.audio.setMusicVolume(save.settings.musicVolume);
+          this.audio.setSfxVolume(save.settings.sfxVolume);
+        }
+        this.showSettings();
+      });
     });
 
     this.addBackButton(() => this.showMainMenu());
@@ -171,7 +163,6 @@ export class MenuScene extends Phaser.Scene {
 
   private showHelp(): void {
     this.clearMenuItems();
-    this.menuState = 'help';
     const cx = GAME_CONFIG.logicalWidth / 2;
 
     const lines = [
@@ -181,17 +172,17 @@ export class MenuScene extends Phaser.Scene {
       `${t('ability')}: E`,
       `${t('pauseKey')}: Esc`,
       '',
-      'Düşmanların üstüne zıplayarak yen.',
+      'Düşmanların üstüne zıplayarak yen!',
       'Özel koleksiyonları bul!',
       '6 dünyada 30 bölümü geç.',
       'Her dünyanın bossunu yen!',
     ];
 
     lines.forEach((line, i) => {
-      const txt = this.add.text(cx, 360 + i * 30, line, {
+      const txt = this.add.text(cx, 360 + i * 28, line, {
         fontSize: '16px', fontFamily: 'Arial, sans-serif', color: '#cbd5e1',
       }).setOrigin(0.5);
-      (txt as any)._menuBtn = true;
+      this.menuItems.push(txt);
     });
 
     this.addBackButton(() => this.showMainMenu());
@@ -199,95 +190,98 @@ export class MenuScene extends Phaser.Scene {
 
   private addBackButton(action: () => void): void {
     const cx = GAME_CONFIG.logicalWidth / 2;
-    const btn = this.add.text(cx, 650, t('back'), {
-      fontSize: '18px', fontFamily: 'Arial, sans-serif', color: '#94a3b8',
-      backgroundColor: '#1e293b', padding: { x: 20, y: 8 },
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    (btn as any)._menuBtn = true;
-    btn.on('pointerdown', action);
+    this.addMenuItem(cx, 650, t('back'), '#94a3b8', action);
   }
 
   private showWorldMap(): void {
-    this.scene.start('WorldMap', { saveSlot: this.selectedSlot });
+    this.scene.start('WorldMap');
   }
 
   private startGame(save: SaveData): void {
     (this.game as any).currentSave = save;
     const firstLevel = save.currentLevel || '1-1';
-    this.scene.start('Play', { levelId: firstLevel, save });
+    (this.game as any).pendingLevelId = firstLevel;
+    this.scene.start('Play');
   }
 }
 
 // ---- WORLD MAP SCENE ----
 export class WorldMapScene extends Phaser.Scene {
-  private save!: SaveData;
+  private save: SaveData | null = null;
+  private menuItems: Phaser.GameObjects.GameObject[] = [];
 
-  constructor() { super('WorldMap'); }
+  constructor() { super({ key: 'WorldMap' }); }
 
-  create(data: { saveSlot?: number; save?: SaveData }): void {
-    this.save = data.save || (this.game as any).currentSave || loadSave(0) || createEmptySave(0);
+  create(): void {
+    this.save = (this.game as any).currentSave || loadSave(0) || createEmptySave(0);
     const cx = GAME_CONFIG.logicalWidth / 2;
 
     // Arka plan
     const bg = this.add.graphics();
-    bg.fillGradientStyle(0x0a1628, 0x0a1628, 0x1a2d4a, 0x1a2d4a, 1);
+    bg.fillStyle(0x0a1628, 1);
     bg.fillRect(0, 0, GAME_CONFIG.logicalWidth, GAME_CONFIG.logicalHeight);
 
-    this.add.text(cx, 40, t('worldMap'), {
+    const title = this.add.text(cx, 40, t('worldMap'), {
       fontSize: '32px', fontFamily: 'Arial, sans-serif', color: '#2dd4bf',
     }).setOrigin(0.5);
+    this.menuItems.push(title);
 
     WORLDS.forEach((world, wi) => {
-      const unlocked = wi + 1 <= this.save.worldsUnlocked;
+      const unlocked = wi + 1 <= (this.save!.worldsUnlocked || 1);
       const wx = 120 + (wi % 3) * 400;
       const wy = 120 + Math.floor(wi / 3) * 280;
 
       // Dünya kartı
       const card = this.add.graphics();
-      card.fillStyle(unlocked ? parseInt(world.bgColor2.replace('#', ''), 16) : 0x1e293b, 0.8);
+      const bgColor = unlocked ? parseInt(world.bgColor2.replace('#', ''), 16) : 0x1e293b;
+      card.fillStyle(bgColor, 0.8);
       card.fillRoundedRect(wx - 150, wy - 10, 300, 220, 12);
-      card.lineStyle(2, unlocked ? parseInt(world.color.replace('#', ''), 16) : 0x475569);
+      const lineColor = unlocked ? parseInt(world.color.replace('#', ''), 16) : 0x475569;
+      card.lineStyle(2, lineColor);
       card.strokeRoundedRect(wx - 150, wy - 10, 300, 220, 12);
 
       // Dünya adı
-      this.add.text(wx, wy + 10, world.name, {
+      const nameText = this.add.text(wx, wy + 10, world.name, {
         fontSize: '20px', fontFamily: 'Arial, sans-serif',
         color: unlocked ? world.color : '#475569',
       }).setOrigin(0.5);
+      this.menuItems.push(nameText);
 
       if (unlocked) {
-        // Bölümler
         const levels = getLevelsByWorld(world.id);
         levels.forEach((level, li) => {
-          const completed = this.save.levelsCompleted.includes(level.id);
+          const completed = this.save!.levelsCompleted.includes(level.id);
           const lx = wx - 100 + (li % 5) * 50;
           const ly = wy + 60 + Math.floor(li / 5) * 50;
 
-          const dot = this.add.circle(lx, ly, 16, completed ? parseInt(world.color.replace('#', ''), 16) : 0x334155);
+          const dotColor = completed ? parseInt(world.color.replace('#', ''), 16) : 0x334155;
+          const dot = this.add.circle(lx, ly, 16, dotColor);
           dot.setInteractive({ useHandCursor: true });
 
-          const label = level.isBoss ? 'B' : `${level.stage}`;
-          this.add.text(lx, ly, label, {
+          const label = this.add.text(lx, ly, level.isBoss ? 'B' : `${level.stage}`, {
             fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#fff',
           }).setOrigin(0.5);
+          this.menuItems.push(label);
 
           dot.on('pointerdown', () => {
-            this.save.currentLevel = level.id;
-            saveGame(this.save);
+            this.save!.currentLevel = level.id;
+            saveGame(this.save!);
             (this.game as any).currentSave = this.save;
-            this.scene.start('Play', { levelId: level.id, save: this.save });
+            (this.game as any).pendingLevelId = level.id;
+            this.scene.start('Play');
           });
         });
 
-        // Koleksiyon sayısı
-        const worldSpecials = this.save.specialsCollected.filter(s => s.startsWith(`${world.id}-`)).length;
-        this.add.text(wx, wy + 170, `${t('collectibles')}: ${worldSpecials}/15`, {
+        const worldSpecials = this.save!.specialsCollected.filter(s => s.startsWith(`${world.id}-`)).length;
+        const colText = this.add.text(wx, wy + 170, `${t('collectibles')}: ${worldSpecials}/15`, {
           fontSize: '14px', fontFamily: 'Arial, sans-serif', color: '#94a3b8',
         }).setOrigin(0.5);
+        this.menuItems.push(colText);
       } else {
-        this.add.text(wx, wy + 80, t('locked'), {
+        const lockText = this.add.text(wx, wy + 80, t('locked'), {
           fontSize: '18px', fontFamily: 'Arial, sans-serif', color: '#475569',
         }).setOrigin(0.5);
+        this.menuItems.push(lockText);
       }
     });
 
@@ -297,6 +291,7 @@ export class WorldMapScene extends Phaser.Scene {
       backgroundColor: '#1e293b', padding: { x: 20, y: 8 },
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     backBtn.on('pointerdown', () => this.scene.start('Menu'));
+    this.menuItems.push(backBtn);
   }
 }
 
@@ -309,23 +304,28 @@ export class PlayScene extends Phaser.Scene {
   private platforms: GamePlatform[] = [];
   private level!: LevelData;
   private save!: SaveData;
-  private camera!: Phaser.Cameras.Scene2D.Camera;
   private hud!: HUD;
   private paused: boolean = false;
   private levelTime: number = 0;
-  private audio!: AudioSystem;
+  private audio: AudioSystem | null = null;
   private touchControls: TouchControls | null = null;
   private hazards: Phaser.Physics.Arcade.StaticGroup | null = null;
   private checkpointPos: { x: number; y: number } = { x: 0, y: 0 };
   private activatedCheckpoints: Set<string> = new Set();
+  private pauseOverlay: Phaser.GameObjects.Container | null = null;
 
-  constructor() { super('Play'); }
+  constructor() { super({ key: 'Play' }); }
 
-  create(data: { levelId: string; save: SaveData }): void {
-    this.audio = (this.game as any).audioSys;
-    this.save = data.save || (this.game as any).currentSave || createEmptySave(0);
-    this.level = getLevelById(data.levelId)!;
-    if (!this.level) { this.scene.start('Menu'); return; }
+  create(): void {
+    this.audio = (this.game as any).audioSys || null;
+    this.save = (this.game as any).currentSave || createEmptySave(0);
+    const levelId = (this.game as any).pendingLevelId || '1-1';
+    this.level = getLevelById(levelId)!;
+    
+    if (!this.level) {
+      this.scene.start('Menu');
+      return;
+    }
 
     this.paused = false;
     this.levelTime = 0;
@@ -370,13 +370,15 @@ export class PlayScene extends Phaser.Scene {
     this.setupCollisions();
 
     // Kamera
-    this.camera = this.cameras.main;
-    this.camera.setBounds(0, 0, this.level.width, this.level.height);
-    this.camera.startFollow(this.player.sprite, true, 0.08, 0.08);
+    this.cameras.main.setBounds(0, 0, this.level.width, this.level.height);
+    this.cameras.main.startFollow(this.player.sprite, true, 0.08, 0.08);
     if (this.level.cameraBounds) {
-      this.camera.setBounds(this.level.cameraBounds.left, this.level.cameraBounds.top,
+      this.cameras.main.setBounds(
+        this.level.cameraBounds.left,
+        this.level.cameraBounds.top,
         this.level.cameraBounds.right - this.level.cameraBounds.left,
-        this.level.cameraBounds.bottom - this.level.cameraBounds.top);
+        this.level.cameraBounds.bottom - this.level.cameraBounds.top
+      );
     }
 
     // HUD
@@ -394,16 +396,19 @@ export class PlayScene extends Phaser.Scene {
     this.setupEvents();
 
     // Duraklatma
-    this.input.keyboard?.on('keydown-ESC', () => this.togglePause());
+    if (this.input.keyboard) {
+      this.input.keyboard.on('keydown-ESC', () => this.togglePause());
+    }
   }
 
   private createParallax(): void {
     this.level.parallaxLayers.forEach(layer => {
       layer.elements.forEach(el => {
         const g = this.add.graphics();
-        g.fillStyle(parseInt(layer.color.replace('#', ''), 16) || 0x334155, 0.3);
+        const color = parseInt(layer.color.replace('#', '').substring(0, 6), 16) || 0x334155;
+        g.fillStyle(color, 0.3);
         if (el.type === 'cloud') {
-          g.fillEllipse(el.x, el.y, el.w, el.h);
+          g.fillEllipse(el.x + el.w / 2, el.y + el.h / 2, el.w, el.h);
         } else if (el.type === 'mountain') {
           g.fillTriangle(el.x, el.y + el.h, el.x + el.w / 2, el.y, el.x + el.w, el.y + el.h);
         } else {
@@ -427,8 +432,10 @@ export class PlayScene extends Phaser.Scene {
     this.level.hazards.forEach(h => {
       const tex = h.type === 'lava' ? 'hazard_lava' : 'hazard_spikes';
       const spike = this.hazards!.create(h.x + h.w / 2, h.y + h.h / 2, tex) as Phaser.Physics.Arcade.Sprite;
-      spike.setDisplaySize(h.w, h.h);
-      spike.setSize(h.w, h.h);
+      if (spike) {
+        spike.setDisplaySize(h.w, h.h);
+        spike.setSize(h.w, h.h);
+      }
     });
   }
 
@@ -459,11 +466,11 @@ export class PlayScene extends Phaser.Scene {
   private setupCollisions(): void {
     // Oyuncu - Platformlar
     this.platforms.forEach(plat => {
-      if (plat.broken) return;
-      this.physics.add.collider(this.player.sprite, plat.sprite, (obj1) => {
+      if (plat.broken || !plat.sprite.active) return;
+      this.physics.add.collider(this.player.sprite, plat.sprite, (obj1: any) => {
         if (obj1 === this.player.sprite) {
           const body = this.player.sprite.body as Phaser.Physics.Arcade.Body;
-          if (body.velocity.y >= 0 && this.player.sprite.y < plat.sprite.y - 10) {
+          if (body && body.velocity.y >= 0 && this.player.sprite.y < plat.sprite.y - 10) {
             this.player.setGrounded(true);
             if (plat.type === 'bounce') {
               this.player.sprite.setVelocityY(PLAYER.bounceForce);
@@ -485,13 +492,14 @@ export class PlayScene extends Phaser.Scene {
 
     // Oyuncu - Düşmanlar
     this.enemies.forEach(enemy => {
+      if (!enemy.sprite.active) return;
       this.physics.add.overlap(this.player.sprite, enemy.sprite, () => {
         if (!enemy.alive) return;
         const playerBottom = this.player.sprite.y + PLAYER.height / 2;
         const enemyTop = enemy.sprite.y - enemy.sprite.height / 2;
+        const playerVy = this.player.sprite.body ? (this.player.sprite.body as Phaser.Physics.Arcade.Body).velocity.y : 0;
         
-        if ((this.player.sprite.body?.velocity.y ?? 0) > 0 && playerBottom < enemyTop + 15) {
-          // Üstüne zıplama
+        if (playerVy > 0 && playerBottom < enemyTop + 15) {
           const killed = enemy.takeDamage();
           this.player.sprite.setVelocityY(-300);
           if (killed) {
@@ -507,6 +515,7 @@ export class PlayScene extends Phaser.Scene {
 
     // Oyuncu - Koleksiyonlar
     this.collectibles.forEach(col => {
+      if (!col.sprite.active) return;
       this.physics.add.overlap(this.player.sprite, col.sprite, () => {
         if (col.collected) return;
         col.collect();
@@ -525,13 +534,14 @@ export class PlayScene extends Phaser.Scene {
     });
 
     // Oyuncu - Boss
-    if (this.boss) {
+    if (this.boss && this.boss.sprite.active) {
       this.physics.add.overlap(this.player.sprite, this.boss.sprite, () => {
-        if (!this.boss?.alive) return;
+        if (!this.boss || !this.boss.alive) return;
         const playerBottom = this.player.sprite.y + PLAYER.height / 2;
         const bossTop = this.boss.sprite.y - this.boss.sprite.height / 2;
+        const playerVy = this.player.sprite.body ? (this.player.sprite.body as Phaser.Physics.Arcade.Body).velocity.y : 0;
         
-        if ((this.player.sprite.body?.velocity.y ?? 0) > 0 && playerBottom < bossTop + 20) {
+        if (playerVy > 0 && playerBottom < bossTop + 20) {
           const killed = this.boss.takeDamage();
           this.player.sprite.setVelocityY(-350);
           if (this.audio) this.audio.playBossHit();
@@ -567,31 +577,36 @@ export class PlayScene extends Phaser.Scene {
     const sparkGroup = this.player.getSparkGroup();
     if (sparkGroup) {
       this.enemies.forEach(enemy => {
-        this.physics.add.overlap(sparkGroup, enemy.sprite, (_, obj2) => {
+        if (!enemy.sprite.active) return;
+        this.physics.add.overlap(sparkGroup, enemy.sprite, (_obj1: any, obj2: any) => {
           if (!enemy.alive) return;
           enemy.takeDamage();
-          (obj2 as Phaser.Physics.Arcade.Sprite).setActive(false);
-          (obj2 as Phaser.Physics.Arcade.Sprite).setVisible(false);
+          if (obj2 && obj2.setActive) { obj2.setActive(false); obj2.setVisible(false); }
         });
       });
     }
 
     // Kontrol noktaları
-    const checkpointSprites = this.children.list.filter(c => c.type === 'Sprite' && (c as any).getData && (c as any).getData('checkpointId')) as Phaser.GameObjects.Sprite[];
+    const checkpointSprites = this.children.list.filter(c => 
+      c.type === 'Sprite' && 
+      typeof (c as any).getData === 'function' && 
+      (c as any).getData('checkpointId')
+    ) as Phaser.GameObjects.Sprite[];
+    
     checkpointSprites.forEach(cpSprite => {
-      this.physics.add.overlap(this.player.sprite, cpSprite, (_obj1, obj2) => {
-        const cpId = (obj2 as any).getData('checkpointId');
+      this.physics.add.overlap(this.player.sprite, cpSprite, (_obj1: any, obj2: any) => {
+        const cpId = obj2.getData('checkpointId');
         if (cpId && !this.activatedCheckpoints.has(cpId)) {
           this.activatedCheckpoints.add(cpId);
-          const pos = (obj2 as any).getData('pos');
+          const pos = obj2.getData('pos');
           if (pos) this.checkpointPos = pos;
-          (obj2 as Phaser.GameObjects.Sprite).setTexture('checkpoint_active');
+          obj2.setTexture('checkpoint_active');
           if (this.audio) this.audio.playCoin();
         }
       });
     });
 
-    // Zemin kontrolü - oyuncu yere değince
+    // Zemin kontrolü
     if (this.player.sprite.body) {
       (this.player.sprite.body as Phaser.Physics.Arcade.Body).onWorldBounds = true;
     }
@@ -603,42 +618,44 @@ export class PlayScene extends Phaser.Scene {
     this.events.on('playerDeath', () => {
       if (this.audio) this.audio.playDeath();
       this.time.delayedCall(1500, () => {
-        if (this.save.lives > 1 || true) { // Sınırsız tekrar
-          this.player.respawn(this.checkpointPos.x, this.checkpointPos.y);
-        } else {
-          this.scene.start('Menu');
-        }
+        this.player.respawn(this.checkpointPos.x, this.checkpointPos.y);
       });
     });
   }
 
-  update(time: number, dt: number): void {
+  update(_time: number, dt: number): void {
     if (this.paused) return;
     const deltaSec = Math.min(dt / 1000, 0.05);
     this.levelTime += deltaSec;
 
     // Oyuncu güncelleme
-    const touchInput = this.touchControls?.getInput();
+    const touchInput = this.touchControls ? this.touchControls.getInput() : undefined;
     this.player.update(deltaSec, touchInput);
 
     // Zemin kontrolü
     const body = this.player.sprite.body as Phaser.Physics.Arcade.Body;
-    if (body.touching.down || body.blocked.down) {
-      this.player.setGrounded(true);
-    } else if (!body.touching.down && !body.blocked.down) {
-      this.player.setGrounded(false);
+    if (body) {
+      if (body.touching.down || body.blocked.down) {
+        this.player.setGrounded(true);
+      } else {
+        this.player.setGrounded(false);
+      }
     }
 
     // Düşmanlar
-    this.enemies.forEach(e => e.update(deltaSec, this.player.sprite.x, this.player.sprite.y));
+    this.enemies.forEach(e => {
+      if (e.alive) e.update(deltaSec, this.player.sprite.x, this.player.sprite.y);
+    });
 
     // Boss
-    if (this.boss?.alive) {
+    if (this.boss && this.boss.alive) {
       this.boss.update(deltaSec, this.player.sprite.x, this.player.sprite.y);
     }
 
     // Platformlar
-    this.platforms.forEach(p => p.update(deltaSec));
+    this.platforms.forEach(p => {
+      if (!p.broken) p.update(deltaSec);
+    });
 
     // Ölüm kontrolü
     if (this.player.sprite.y > this.level.height + 100) {
@@ -669,7 +686,6 @@ export class PlayScene extends Phaser.Scene {
       if (!this.save.bossDefeated.includes(this.level.bossDef.id)) {
         this.save.bossDefeated.push(this.level.bossDef.id);
       }
-      // Sonraki dünyayı aç
       if (this.save.worldsUnlocked <= this.level.world) {
         this.save.worldsUnlocked = Math.min(6, this.level.world + 1);
       }
@@ -681,14 +697,14 @@ export class PlayScene extends Phaser.Scene {
     }
     saveGame(this.save);
     (this.game as any).currentSave = this.save;
+    (this.game as any).lastResults = {
+      level: this.level,
+      time: this.levelTime,
+      score: this.player.state.score,
+    };
 
     this.time.delayedCall(1000, () => {
-      this.scene.start('Results', {
-        level: this.level,
-        time: this.levelTime,
-        score: this.player.state.score,
-        save: this.save,
-      });
+      this.scene.start('Results');
     });
   }
 
@@ -703,27 +719,28 @@ export class PlayScene extends Phaser.Scene {
     }
   }
 
-  private pauseOverlay: Phaser.GameObjects.Container | null = null;
-
   private showPauseMenu(): void {
     const cx = GAME_CONFIG.logicalWidth / 2;
     const cy = GAME_CONFIG.logicalHeight / 2;
     
     this.pauseOverlay = this.add.container(0, 0);
+    this.pauseOverlay.setDepth(1000);
+    
     const overlay = this.add.graphics();
     overlay.fillStyle(0x000000, 0.7);
     overlay.fillRect(0, 0, GAME_CONFIG.logicalWidth, GAME_CONFIG.logicalHeight);
     this.pauseOverlay.add(overlay);
 
-    this.pauseOverlay.add(this.add.text(cx, cy - 80, t('pause'), {
+    const title = this.add.text(cx, cy - 80, t('pause'), {
       fontSize: '36px', fontFamily: 'Arial, sans-serif', color: '#2dd4bf',
-    }).setOrigin(0.5));
+    }).setOrigin(0.5);
+    this.pauseOverlay.add(title);
 
     const btns = [
       { label: t('resume'), action: () => this.togglePause() },
-      { label: t('restart'), action: () => { this.paused = false; this.physics.world.resume(); this.scene.restart({ levelId: this.level.id, save: this.save }); } },
-      { label: t('quitToMap'), action: () => { this.paused = false; this.scene.start('WorldMap', { save: this.save }); } },
-      { label: t('quitToMenu'), action: () => { this.paused = false; if (this.audio) this.audio.stopMusic(); this.scene.start('Menu'); } },
+      { label: t('restart'), action: () => { this.paused = false; this.physics.world.resume(); this.scene.restart(); } },
+      { label: t('quitToMap'), action: () => { if (this.audio) this.audio.stopMusic(); this.scene.start('WorldMap'); } },
+      { label: t('quitToMenu'), action: () => { if (this.audio) this.audio.stopMusic(); this.scene.start('Menu'); } },
     ];
 
     btns.forEach((btn, i) => {
@@ -746,8 +763,8 @@ export class PlayScene extends Phaser.Scene {
     this.collectibles.forEach(c => c.destroy());
     this.platforms.forEach(p => p.destroy());
     if (this.boss) this.boss.destroy();
-    this.player.destroy();
-    // Touch controls cleanup done internally
+    if (this.player) this.player.destroy();
+    if (this.touchControls) this.touchControls.destroy();
   }
 }
 
@@ -770,7 +787,7 @@ class HUD {
     // Arka plan şeridi
     const bg = scene.add.graphics();
     bg.fillStyle(0x000000, 0.5);
-    bg.fillRoundedRect(10, 10, 300, 40, 8);
+    bg.fillRoundedRect(10, 10, 320, 40, 8);
     this.container.add(bg);
 
     this.livesText = scene.add.text(20, 18, `❤ ${save.lives}`, {
@@ -813,7 +830,7 @@ class HUD {
       this.powerUpText.setText('');
     }
 
-    this.levelText.setText(`${level.name}`);
+    this.levelText.setText(level.name);
   }
 }
 
@@ -828,6 +845,8 @@ class TouchControls {
   private abilityBtn: boolean = false;
   private pointers: Map<number, string> = new Map();
   private container: Phaser.GameObjects.Container;
+  private onDown: (p: Phaser.Input.Pointer) => void;
+  private onUp: (p: Phaser.Input.Pointer) => void;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -835,36 +854,32 @@ class TouchControls {
     this.container.setScrollFactor(0);
     this.container.setDepth(200);
 
-    const g = scene.add.graphics();
-    g.setScrollFactor(0);
-
     // Sol yön butonları
     const leftBtn = scene.add.text(60, GAME_CONFIG.logicalHeight - 80, '◀', {
       fontSize: '36px', color: '#ffffff80',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: false });
+    }).setOrigin(0.5);
     leftBtn.setScrollFactor(0);
 
     const rightBtn = scene.add.text(160, GAME_CONFIG.logicalHeight - 80, '▶', {
       fontSize: '36px', color: '#ffffff80',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: false });
+    }).setOrigin(0.5);
     rightBtn.setScrollFactor(0);
 
     // Zıplama
     const jumpB = scene.add.text(GAME_CONFIG.logicalWidth - 120, GAME_CONFIG.logicalHeight - 80, '▲', {
       fontSize: '36px', color: '#ffffff80',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: false });
+    }).setOrigin(0.5);
     jumpB.setScrollFactor(0);
 
     // Yetenek
     const abilityB = scene.add.text(GAME_CONFIG.logicalWidth - 220, GAME_CONFIG.logicalHeight - 80, '✦', {
       fontSize: '30px', color: '#ffffff60',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: false });
+    }).setOrigin(0.5);
     abilityB.setScrollFactor(0);
 
     this.container.add([leftBtn, rightBtn, jumpB, abilityB]);
 
-    // Pointer olayları
-    scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+    this.onDown = (pointer: Phaser.Input.Pointer) => {
       const x = pointer.x, y = pointer.y;
       if (x < 200 && y > GAME_CONFIG.logicalHeight - 140) {
         if (x < 110) { this.left = true; this.pointers.set(pointer.id, 'left'); }
@@ -876,16 +891,19 @@ class TouchControls {
         this.abilityBtn = true;
         this.pointers.set(pointer.id, 'ability');
       }
-    });
+    };
 
-    scene.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+    this.onUp = (pointer: Phaser.Input.Pointer) => {
       const action = this.pointers.get(pointer.id);
       if (action === 'left') this.left = false;
       else if (action === 'right') this.right = false;
       else if (action === 'jump') { this.jumpBtn = false; this.jumpReleased = true; }
       else if (action === 'ability') this.abilityBtn = false;
       this.pointers.delete(pointer.id);
-    });
+    };
+
+    scene.input.on('pointerdown', this.onDown);
+    scene.input.on('pointerup', this.onUp);
   }
 
   getInput(): { left: boolean; right: boolean; jump: boolean; jumpPressed: boolean; jumpReleased: boolean; run: boolean; ability: boolean } {
@@ -895,7 +913,7 @@ class TouchControls {
       jump: this.jumpBtn,
       jumpPressed: this.jumpPressed,
       jumpReleased: this.jumpReleased,
-      run: false, // Mobil otomatik koşma
+      run: false,
       ability: this.abilityBtn,
     };
     this.jumpPressed = false;
@@ -904,42 +922,51 @@ class TouchControls {
   }
 
   destroy(): void {
+    this.scene.input.off('pointerdown', this.onDown);
+    this.scene.input.off('pointerup', this.onUp);
     this.container.destroy();
   }
 }
 
 // ---- RESULTS SCENE ----
 export class ResultsScene extends Phaser.Scene {
-  constructor() { super('Results'); }
+  constructor() { super({ key: 'Results' }); }
 
-  create(data: { level: LevelData; time: number; score: number; save: SaveData }): void {
+  create(): void {
+    const results = (this.game as any).lastResults;
+    if (!results) { this.scene.start('Menu'); return; }
+    
+    const level: LevelData = results.level;
+    const time: number = results.time;
+    const score: number = results.score;
+    const save: SaveData = (this.game as any).currentSave || createEmptySave(0);
+
     const cx = GAME_CONFIG.logicalWidth / 2;
-    const cy = GAME_CONFIG.logicalHeight / 2;
 
     const bg = this.add.graphics();
-    bg.fillGradientStyle(0x0a1628, 0x0a1628, 0x1a2d4a, 0x1a2d4a, 1);
+    bg.fillStyle(0x0a1628, 1);
     bg.fillRect(0, 0, GAME_CONFIG.logicalWidth, GAME_CONFIG.logicalHeight);
 
-    const title = data.level.isBoss ? t('bossDefeated') : t('levelComplete');
+    const title = level.isBoss ? t('bossDefeated') : t('levelComplete');
     this.add.text(cx, 120, title, {
       fontSize: '40px', fontFamily: 'Arial, sans-serif', color: '#4ade80',
     }).setOrigin(0.5);
 
-    this.add.text(cx, 200, data.level.name, {
+    this.add.text(cx, 200, level.name, {
       fontSize: '24px', fontFamily: 'Arial, sans-serif', color: '#94a3b8',
     }).setOrigin(0.5);
 
-    const mins = Math.floor(data.time / 60);
-    const secs = Math.floor(data.time % 60);
+    const mins = Math.floor(time / 60);
+    const secs = Math.floor(time % 60);
     this.add.text(cx, 280, `${t('time')}: ${mins}:${secs.toString().padStart(2, '0')}`, {
       fontSize: '22px', fontFamily: 'Arial, sans-serif', color: '#60a5fa',
     }).setOrigin(0.5);
 
-    this.add.text(cx, 320, `${t('score')}: ${data.score}`, {
+    this.add.text(cx, 320, `${t('score')}: ${score}`, {
       fontSize: '22px', fontFamily: 'Arial, sans-serif', color: '#fbbf24',
     }).setOrigin(0.5);
 
-    const bestTime = data.save.bestTimes[data.level.id];
+    const bestTime = save.bestTimes[level.id];
     if (bestTime) {
       const bm = Math.floor(bestTime / 60);
       const bs = Math.floor(bestTime % 60);
@@ -950,9 +977,9 @@ export class ResultsScene extends Phaser.Scene {
 
     // Butonlar
     const buttons = [
-      { label: t('nextLevel'), action: () => this.nextLevel(data) },
-      { label: t('retry'), action: () => this.scene.start('Play', { levelId: data.level.id, save: data.save }) },
-      { label: t('quitToMap'), action: () => this.scene.start('WorldMap', { save: data.save }) },
+      { label: t('nextLevel'), action: () => this.nextLevel(level, save) },
+      { label: t('retry'), action: () => { (this.game as any).pendingLevelId = level.id; this.scene.start('Play'); } },
+      { label: t('quitToMap'), action: () => this.scene.start('WorldMap') },
       { label: t('quitToMenu'), action: () => this.scene.start('Menu') },
     ];
 
@@ -965,20 +992,19 @@ export class ResultsScene extends Phaser.Scene {
     });
   }
 
-  private nextLevel(data: { level: LevelData; save: SaveData }): void {
+  private nextLevel(level: LevelData, save: SaveData): void {
     const allLevels = getAllLevels();
-    const idx = allLevels.findIndex(l => l.id === data.level.id);
+    const idx = allLevels.findIndex(l => l.id === level.id);
     if (idx >= 0 && idx < allLevels.length - 1) {
       const next = allLevels[idx + 1];
-      // Sonraki dünya kilidi kontrolü
-      if (next.world > data.save.worldsUnlocked) {
-        this.scene.start('WorldMap', { save: data.save });
+      if (next.world > save.worldsUnlocked) {
+        this.scene.start('WorldMap');
         return;
       }
-      this.scene.start('Play', { levelId: next.id, save: data.save });
+      (this.game as any).pendingLevelId = next.id;
+      this.scene.start('Play');
     } else {
-      // Oyun bitti!
-      this.scene.start('WorldMap', { save: data.save });
+      this.scene.start('WorldMap');
     }
   }
 }

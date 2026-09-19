@@ -86,8 +86,7 @@ export class Player {
     this.lastJumpDown = jumpDown;
     const run = this.keys.SHIFT?.isDown ?? false;
     const ability = this.keys.E?.isDown ?? false;
-    const pause = this.keys.ESC?.isDown ?? false;
-    return { left, right, jump: jumpDown, jumpPressed, jumpReleased, run, ability, pause };
+    return { left, right, jump: jumpDown, jumpPressed, jumpReleased, run, ability };
   }
 
   update(dt: number, touchInput?: { left: boolean; right: boolean; jump: boolean; jumpPressed: boolean; jumpReleased: boolean; run: boolean; ability: boolean }): void {
